@@ -60,8 +60,21 @@ class LLMClient:
         if response_format:
             kwargs["response_format"] = response_format
 
+        # z.ai GLM-5/GLM-4.7 return reasoning_content with empty content
+        # when thinking mode is enabled. Disable it for reliable output.
+        if 'z.ai' in (self.base_url or ''):
+            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+
         response = self.client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+
+        # Fallback: if content is empty but reasoning_content exists, use that
+        if not content:
+            reasoning = getattr(response.choices[0].message, 'reasoning_content', None)
+            if reasoning:
+                content = reasoning
+
+        return content or ""
 
     def chat_json(
         self,
@@ -80,6 +93,8 @@ class LLMClient:
         Returns:
             Parsed JSON object
         """
+        import re
+
         response = self.chat(
             messages=messages,
             temperature=temperature,
@@ -87,4 +102,13 @@ class LLMClient:
             response_format={"type": "json_object"}
         )
 
-        return json.loads(response)
+        # Clean markdown code block markers
+        cleaned = response.strip()
+        cleaned = re.sub(r'^```(?:json)?\s*\n?', '', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\n?```\s*$', '', cleaned)
+        cleaned = cleaned.strip()
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            raise ValueError(f"LLM returned invalid JSON: {cleaned[:200]}")
