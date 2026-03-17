@@ -2,12 +2,12 @@
 Graphiti-core Monkey Patch
 
 Workaround for graphiti-core Issue #683:
-LLM 生成的嵌套属性会导致 Neo4j 写入失败
+LLM-generated nested attributes can cause Neo4j writes to fail
 (Neo4j property values only accept primitive types or arrays thereof)
 
-Patch 策略：
-- 拦截 bulk_utils.add_nodes_and_edges_bulk_tx
-- 在写入 Neo4j 前将嵌套 dict/list 转为 JSON 字符串
+Patch strategy:
+- Intercept bulk_utils.add_nodes_and_edges_bulk_tx
+- Convert nested dict/list to JSON strings before writing to Neo4j
 """
 
 import json
@@ -23,16 +23,16 @@ _patch_applied = False
 
 def sanitize_for_neo4j(value: Any, path: str = "") -> Any:
     """
-    递归 sanitize 值以适配 Neo4j 属性限制
+    Recursively sanitize values to comply with Neo4j property constraints
 
-    Neo4j 只接受:
-    - 原始类型: str, int, float, bool, None
-    - 原始类型的数组 (不能嵌套)
+    Neo4j only accepts:
+    - Primitive types: str, int, float, bool, None
+    - Arrays of primitive types (no nesting)
 
-    策略:
-    - 嵌套 dict → JSON 字符串
-    - 嵌套 list (包含 dict) → JSON 字符串
-    - 简单 list (只有原始类型) → 保持不变
+    Strategy:
+    - Nested dict -> JSON string
+    - Nested list (containing dict) -> JSON string
+    - Simple list (only primitive types) -> keep as-is
     """
     if value is None:
         return None
@@ -41,32 +41,32 @@ def sanitize_for_neo4j(value: Any, path: str = "") -> Any:
         return value
 
     if isinstance(value, dict):
-        # dict 需要序列化为 JSON 字符串
+        # dict needs to be serialized to JSON string
         try:
             return json.dumps(value, ensure_ascii=False, default=str)
         except (TypeError, ValueError) as e:
-            logger.warning(f"无法序列化 dict 属性 {path}: {e}")
+            logger.warning(f"Cannot serialize dict property {path}: {e}")
             return str(value)
 
     if isinstance(value, (list, tuple)):
-        # 检查是否是简单数组 (只有原始类型)
+        # Check if it's a simple array (only primitive types)
         is_simple = all(isinstance(v, (str, int, float, bool, type(None))) for v in value)
         if is_simple:
             return list(value)
-        # 包含复杂类型，序列化为 JSON
+        # Contains complex types, serialize to JSON
         try:
             return json.dumps(value, ensure_ascii=False, default=str)
         except (TypeError, ValueError) as e:
-            logger.warning(f"无法序列化 list 属性 {path}: {e}")
+            logger.warning(f"Cannot serialize list property {path}: {e}")
             return str(value)
 
-    # 其他类型转字符串
+    # Other types converted to string
     return str(value)
 
 
 def sanitize_attributes(attrs: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Sanitize 整个 attributes 字典
+    Sanitize an entire attributes dictionary
     """
     if not attrs:
         return {}
@@ -79,21 +79,21 @@ def sanitize_attributes(attrs: Dict[str, Any]) -> Dict[str, Any]:
 
 def apply_patch() -> bool:
     """
-    应用 monkey-patch 到 graphiti-core
+    Apply the monkey-patch to graphiti-core
 
     Returns:
-        bool: patch 是否成功应用
+        bool: Whether the patch was successfully applied
     """
     global _patch_applied
 
     if _patch_applied:
-        logger.debug("Graphiti patch 已应用，跳过")
+        logger.debug("Graphiti patch already applied, skipping")
         return True
 
     try:
         from graphiti_core.utils import bulk_utils
 
-        # 保存原始函数
+        # Save the original function
         original_add_nodes_and_edges_bulk_tx = bulk_utils.add_nodes_and_edges_bulk_tx
 
         @functools.wraps(original_add_nodes_and_edges_bulk_tx)
@@ -109,7 +109,7 @@ def apply_patch() -> bool:
             """
             Patched version: sanitize node/edge attributes before Neo4j write
 
-            签名与 graphiti-core 0.25.0 的 add_nodes_and_edges_bulk_tx 保持一致:
+            Signature matches graphiti-core 0.25.0's add_nodes_and_edges_bulk_tx:
             (tx, episodic_nodes, episodic_edges, entity_nodes, entity_edges, embedder, driver)
             """
             # Sanitize entity_nodes attributes
@@ -122,7 +122,7 @@ def apply_patch() -> bool:
                 if hasattr(edge, 'attributes') and edge.attributes:
                     edge.attributes = sanitize_attributes(edge.attributes)
 
-            # 调用原始函数
+            # Call the original function
             return await original_add_nodes_and_edges_bulk_tx(
                 tx,
                 episodic_nodes,
@@ -133,16 +133,16 @@ def apply_patch() -> bool:
                 driver,
             )
 
-        # 应用 patch
+        # Apply the patch
         bulk_utils.add_nodes_and_edges_bulk_tx = patched_add_nodes_and_edges_bulk_tx
 
         _patch_applied = True
-        logger.info("Graphiti bulk_utils patch 应用成功")
+        logger.info("Graphiti bulk_utils patch applied successfully")
         return True
 
     except ImportError as e:
-        logger.warning(f"无法导入 graphiti_core.utils.bulk_utils: {e}")
+        logger.warning(f"Cannot import graphiti_core.utils.bulk_utils: {e}")
         return False
     except Exception as e:
-        logger.error(f"应用 Graphiti patch 失败: {e}")
+        logger.error(f"Failed to apply Graphiti patch: {e}")
         return False

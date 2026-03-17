@@ -1,6 +1,6 @@
 """
-LLM客户端封装
-统一使用OpenAI格式调用
+LLM client wrapper
+Unified OpenAI-format API calls
 """
 
 import json
@@ -11,8 +11,8 @@ from ..config import Config
 
 
 class LLMClient:
-    """LLM客户端"""
-    
+    """LLM Client"""
+
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -22,15 +22,15 @@ class LLMClient:
         self.api_key = api_key or Config.LLM_API_KEY
         self.base_url = base_url or Config.LLM_BASE_URL
         self.model = model or Config.LLM_MODEL_NAME
-        
+
         if not self.api_key:
-            raise ValueError("LLM_API_KEY 未配置")
-        
+            raise ValueError("LLM_API_KEY is not configured")
+
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url
         )
-    
+
     def chat(
         self,
         messages: List[Dict[str, str]],
@@ -39,16 +39,16 @@ class LLMClient:
         response_format: Optional[Dict] = None
     ) -> str:
         """
-        发送聊天请求
-        
+        Send a chat request
+
         Args:
-            messages: 消息列表
-            temperature: 温度参数
-            max_tokens: 最大token数
-            response_format: 响应格式（如JSON模式）
-            
+            messages: Message list
+            temperature: Temperature parameter
+            max_tokens: Maximum number of tokens
+            response_format: Response format (e.g., JSON mode)
+
         Returns:
-            模型响应文本
+            Model response text
         """
         kwargs = {
             "model": self.model,
@@ -56,13 +56,13 @@ class LLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        
+
         if response_format:
             kwargs["response_format"] = response_format
-        
+
         response = self.client.chat.completions.create(**kwargs)
         return response.choices[0].message.content
-    
+
     def chat_json(
         self,
         messages: List[Dict[str, str]],
@@ -70,15 +70,15 @@ class LLMClient:
         max_tokens: int = 4096
     ) -> Dict[str, Any]:
         """
-        发送聊天请求并返回JSON
-        
+        Send a chat request and return JSON
+
         Args:
-            messages: 消息列表
-            temperature: 温度参数
-            max_tokens: 最大token数
-            
+            messages: Message list
+            temperature: Temperature parameter
+            max_tokens: Maximum number of tokens
+
         Returns:
-            解析后的JSON对象
+            Parsed JSON object
         """
         response = self.chat(
             messages=messages,
@@ -86,6 +86,5 @@ class LLMClient:
             max_tokens=max_tokens,
             response_format={"type": "json_object"}
         )
-        
-        return json.loads(response)
 
+        return json.loads(response)
