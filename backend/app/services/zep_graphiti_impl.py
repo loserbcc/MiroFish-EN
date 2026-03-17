@@ -288,9 +288,9 @@ class GraphitiClient(ZepClientAdapter):
         """
         from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 
-        api_key = os.environ.get('OPENAI_API_KEY')
-        base_url = os.environ.get('OPENAI_BASE_URL')
-        embedding_model = os.environ.get('GRAPHITI_EMBEDDING_MODEL')
+        api_key = os.environ.get('GRAPHITI_EMBEDDING_API_KEY') or os.environ.get('EMBEDDING_API_KEY') or os.environ.get('OPENAI_API_KEY')
+        base_url = os.environ.get('GRAPHITI_EMBEDDING_BASE_URL') or os.environ.get('EMBEDDING_BASE_URL') or os.environ.get('OPENAI_BASE_URL')
+        embedding_model = os.environ.get('GRAPHITI_EMBEDDING_MODEL') or os.environ.get('EMBEDDING_MODEL')
 
         if embedding_model:
             config = OpenAIEmbedderConfig(
